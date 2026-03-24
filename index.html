@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kéo Co Phép Tính - Phiên Bản Văn Hóa</title>
+    <style>
+        :root {
+            --primary-color: #e67e22;
+            --secondary-color: #27ae60;
+            --error-color: #e74c3c;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        /* NỀN CHÍNH SỬ DỤNG background.png */
+        #game-viewport {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-image: url('background.png');
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end; /* Đẩy khu vực câu hỏi xuống dưới */
+        }
+
+        /* KHU VỰC KÉO CO */
+        #tug-area {
+            position: absolute;
+            top: 40%;
+            width: 100%;
+            height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        /* HÌNH ẢNH team.png DI CHUYỂN */
+        #players-sprite {
+            width: 800px; /* Điều chỉnh tùy theo kích thước thực tế của team.png */
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.3));
+        }
+
+        /* MÀN HÌNH SETUP & KẾT QUẢ */
+        .overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal {
+            background: #fffdf2;
+            padding: 30px;
+            border-radius: 15px;
+            width: 450px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            border: 5px solid var(--primary-color);
+        }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #5d4037; }
+        select, input, textarea {
+            width: 100%; padding: 12px; border: 2px solid #ddd;
+            border-radius: 8px; font-size: 16px; box-sizing: border-box;
+        }
+
+        .btn {
+            background: var(--primary-color);
+            color: white; border: none; padding: 15px 25px;
+            border-radius: 8px; font-size: 18px; font-weight: bold;
+            cursor: pointer; width: 100%; margin-top: 10px;
+        }
+        .btn:hover { background: #d35400; }
+
+        /* KHU VỰC CÂU HỎI */
+        #ui-bottom {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-top: 5px solid var(--primary-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
+
+        #timer-bar {
+            font-size: 20px; font-weight: bold; color: var(--error-color);
+            margin-bottom: 10px;
+        }
+
+        #question-text {
+            font-size: 42px; font-weight: bold; margin-bottom: 15px;
+            color: #2c3e50; text-shadow: 1px 1px 0px #fff;
+        }
+
+        .answer-box { display: flex; gap: 10px; }
+        #answer-input { width: 150px; text-align: center; font-size: 24px; border: 3px solid var(--primary-color); }
+
+        /* THÔNG BÁO SAI */
+        #explanation {
+            position: fixed;
+            top: 20%;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            border: 3px solid var(--error-color);
+            max-width: 350px;
+            display: none;
+            z-index: 500;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        #audio-panel {
+            position: absolute; top: 15px; right: 15px;
+            background: rgba(255,255,255,0.8); padding: 10px;
+            border-radius: 30px; display: flex; align-items: center; gap: 10px;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="game-viewport">
+        <!-- Nhạc nền -->
+        <audio id="bg-music" loop>
+            <source src="audio.mp3" type="audio/mpeg">
+        </audio>
+
+        <div id="audio-panel">
+            🔈 <input type="range" id="vol-control" min="0" max="1" step="0.1" value="0.5">
+        </div>
+
+        <!-- Màn hình Setup -->
+        <div id="setup-screen" class="overlay">
+            <div class="modal">
+                <h2 style="text-align:center; color: var(--primary-color);">CÀI ĐẶT TRÒ CHƠI</h2>
+                
+                <div class="form-group">
+                    <label>Thời gian suy nghĩ (giây):</label>
+                    <input type="number" id="set-time" value="15">
+                </div>
+
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <button class="btn" style="font-size:14px; background:#8e44ad" onclick="setMode('ai')">AI Tự Tạo</button>
+                    <button class="btn" style="font-size:14px; background:#7f8c8d" onclick="setMode('manual')">Tự Nhập</button>
+                </div>
+
+                <div id="panel-ai">
+                    <div class="form-group">
+                        <label>Chọn lớp:</label>
+                        <select id="set-grade" onchange="updateSub()">
+                            <option value="1">Lớp 1</option>
+                            <option value="2">Lớp 2</option>
+                            <option value="3">Lớp 3</option>
+                            <option value="4">Lớp 4</option>
+                            <option value="5">Lớp 5</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Chủ đề:</label>
+                        <select id="set-topic"></select>
+                    </div>
+                </div>
+
+                <div id="panel-manual" class="hidden">
+                    <div class="form-group">
+                        <label>Nhập: Câu hỏi|Đáp án (mỗi dòng 1 câu)</label>
+                        <textarea id="set-custom" rows="4" placeholder="5+5|10"></textarea>
+                    </div>
+                </div>
+
+                <button class="btn" onclick="start()">BẮT ĐẦU KÉO CO</button>
+            </div>
+        </div>
+
+        <!-- Khu vực Kéo Co -->
+        <div id="tug-area">
+            <img src="team.png" id="players-sprite" alt="Players">
+        </div>
+
+        <!-- Khu vực Điều khiển -->
+        <div id="ui-bottom">
+            <div id="timer-bar">⏱ Còn lại: <span id="sec">0</span>s</div>
+            <div id="question-text">Đang tải...</div>
+            <div class="answer-box">
+                <input type="text" id="answer-input" placeholder="?" autocomplete="off">
+                <button class="btn" style="width:auto; margin:0;" onclick="check()">Gửi</button>
+            </div>
+        </div>
+
+        <!-- Giải thích -->
+        <div id="explanation">
+            <h3 style="color:var(--error-color); margin-top:0;">Chưa đúng rồi!</h3>
+            <p id="exp-text"></p>
+            <button class="btn" onclick="closeExp()">Đã hiểu</button>
+        </div>
+
+        <!-- Màn hình Kết quả -->
+        <div id="win-screen" class="overlay hidden">
+            <div class="modal" style="text-align:center;">
+                <h1 id="win-title" style="font-size:40px;"></h1>
+                <p id="win-desc"></p>
+                <button class="btn" onclick="location.reload()">CHƠI LẠI</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const topics = {
+            1: ["Cộng trừ phạm vi 10", "Các số đến 100", "Hình học cơ bản"],
+            2: ["Cộng trừ có nhớ", "Bảng nhân chia 2, 5", "Đo lường"],
+            3: ["Nhân chia số lớn", "Chu vi, diện tích", "Đo lường"],
+            4: ["Số tự nhiên", "Phân số", "Hình học góc"],
+            5: ["Số thập phân", "Phần trăm", "Chuyển động đều"]
+        };
+
+        let game = {
+            data: [],
+            idx: 0,
+            pos: 0, // 0 là cân bằng, dương là kéo về phải (thắng), âm là kéo về trái
+            time: 15,
+            timer: null,
+            mode: 'ai'
+        };
+
+        const sprite = document.getElementById('players-sprite');
+        const input = document.getElementById('answer-input');
+        const music = document.getElementById('bg-music');
+
+        function updateSub() {
+            const g = document.getElementById('set-grade').value;
+            const s = document.getElementById('set-topic');
+            s.innerHTML = topics[g].map(t => `<option value="${t}">${t}</option>`).join('');
+        }
+        updateSub();
+
+        function setMode(m) {
+            game.mode = m;
+            document.getElementById('panel-ai').classList.toggle('hidden', m !== 'ai');
+            document.getElementById('panel-manual').classList.toggle('hidden', m !== 'manual');
+        }
+
+        document.getElementById('vol-control').oninput = (e) => music.volume = e.target.value;
+
+        function start() {
+            game.time = parseInt(document.getElementById('set-time').value);
+            
+            if(game.mode === 'ai') {
+                const grade = document.getElementById('set-grade').value;
+                // Tạo câu hỏi giả định dựa trên lớp (có thể mở rộng thêm logic toán học ở đây)
+                game.data = [
+                    {q: "12 + 8", a: "20", e: "Vì 12 cộng 8 bằng 20."},
+                    {q: "25 - 5", a: "20", e: "Khi bớt 5 từ 25 ta còn 20."},
+                    {q: "2 x 9", a: "18", e: "Theo bảng nhân 2: 2 lần 9 là 18."},
+                    {q: "10 : 2", a: "5", e: "10 chia đều cho 2 phần, mỗi phần là 5."},
+                    {q: "100 - 1", a: "99", e: "Số liền trước của 100 là 99."}
+                ];
+            } else {
+                const raw = document.getElementById('set-custom').value;
+                game.data = raw.split('\n').filter(l => l.includes('|')).map(l => {
+                    const [q, a] = l.split('|');
+                    return {q: q.trim(), a: a.trim(), e: "Hãy thử tính toán lại cẩn thận nhé!"};
+                });
+            }
+
+            if(game.data.length === 0) return alert("Chưa có câu hỏi!");
+
+            document.getElementById('setup-screen').classList.add('hidden');
+            music.play();
+            showQuest();
+        }
+
+        function showQuest() {
+            if(game.idx >= game.data.length) {
+                finish(game.pos >= 0);
+                return;
+            }
+            input.value = "";
+            input.focus();
+            document.getElementById('question-text').innerText = game.data[game.idx].q + " = ?";
+            
+            let remain = game.time;
+            document.getElementById('sec').innerText = remain;
+            clearInterval(game.timer);
+            game.timer = setInterval(() => {
+                remain--;
+                document.getElementById('sec').innerText = remain;
+                if(remain <= 0) {
+                    clearInterval(game.timer);
+                    wrong("Hết thời gian!");
+                }
+            }, 1000);
+        }
+
+        function check() {
+            clearInterval(game.timer);
+            const val = input.value.trim();
+            if(val === game.data[game.idx].a) {
+                right();
+            } else {
+                wrong();
+            }
+        }
+
+        function right() {
+            game.pos += 120; // Di chuyển sang phải
+            updateSprite();
+            game.idx++;
+            if(game.pos >= 360) return finish(true);
+            setTimeout(showQuest, 1000);
+        }
+
+        function wrong(reason) {
+            game.pos -= 120; // Di chuyển sang trái
+            updateSprite();
+            const q = game.data[game.idx];
+            document.getElementById('exp-text').innerHTML = `Đáp án đúng là: <b>${q.a}</b><br>${q.e}`;
+            document.getElementById('explanation').style.display = 'block';
+            if(game.pos <= -360) return finish(false);
+        }
+
+        function closeExp() {
+            document.getElementById('explanation').style.display = 'none';
+            game.idx++;
+            showQuest();
+        }
+
+        function updateSprite() {
+            sprite.style.transform = `translateX(${game.pos}px)`;
+        }
+
+        function finish(isWin) {
+            document.getElementById('win-screen').classList.remove('hidden');
+            document.getElementById('win-title').innerText = isWin ? "CHIẾN THẮNG! 🏆" : "THẤT BẠI! 🏳️";
+            document.getElementById('win-title').style.color = isWin ? "var(--secondary-color)" : "var(--error-color)";
+            document.getElementById('win-desc').innerText = isWin ? 
+                "Đội của bạn đã kéo rất mạnh! Chúc mừng các kiện tướng toán học." : 
+                "Đội bạn đã bị kéo qua vạch. Hãy luyện tập thêm để phục thù nhé!";
+        }
+
+        input.onkeydown = (e) => { if(e.key === 'Enter') check(); };
+    </script>
+</body>
+</html>
